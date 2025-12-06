@@ -1,3 +1,4 @@
+const fs = require('fs');
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const cheerio = require('cheerio');
@@ -6,6 +7,69 @@ puppeteer.use(StealthPlugin());
 
 const TARGET_URL = 'https://www.seek.com.au/medical-jobs?sortmode=ListedDate&postedDate=28';
 const TARGET_MONTH = 'November'; // For filtering later
+
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function buildHtmlTable(jobs) {
+    const rows = jobs.map(job => `
+            <tr>
+                <td>${escapeHtml(job.title)}</td>
+                <td>${escapeHtml(job.company)}</td>
+                <td>${escapeHtml(job.location)}</td>
+                <td>${escapeHtml(job.posted_text || '')}</td>
+                <td>${escapeHtml(job.actual_date || '')}</td>
+                <td><a href="${escapeHtml(job.link)}" target="_blank" rel="noopener noreferrer">View</a></td>
+            </tr>`).join('\n');
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jobs Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f6f8fb; color: #1a1f36; margin: 24px; }
+        h1 { margin-bottom: 12px; }
+        .summary { margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        th, td { padding: 12px 10px; border-bottom: 1px solid #e4e7eb; text-align: left; }
+        th { background: #23395d; color: #fff; }
+        tr:nth-child(every) { background: #f9fbff; }
+        tr:hover { background: #eef3fb; }
+        a { color: #1b73e8; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .empty { padding: 20px; text-align: center; color: #6c7480; }
+    </style>
+</head>
+<body>
+    <h1>Seek Jobs Report</h1>
+    <div class="summary">Total jobs: ${jobs.length}</div>
+    ${jobs.length === 0 ? '<div class="empty">No jobs found.</div>' : `
+    <table>
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Company</th>
+                <th>Location</th>
+                <th>Posted Text</th>
+                <th>Actual Date</th>
+                <th>Link</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${rows}
+        </tbody>
+    </table>`}
+</body>
+</html>`;
+}
 
 function getActualDate(postDateText) {
     const today = new Date();
@@ -79,7 +143,7 @@ async function scrapeSeek() {
     let currentPage = 1;
     let hasNextPage = true;
 
-    while (hasNextPage && currentPage <= 5) { // Limiting to 5 pages for example
+    while (hasNextPage && currentPage <= 15) { // Limiting to 5 pages for example
         const url = `${TARGET_URL}&page=${currentPage}`;
         console.log(`Navigating to page ${currentPage}: ${url}`);
 
@@ -179,7 +243,14 @@ async function scrapeSeek() {
     await browser.close();
     
     console.log(`\n✅ Scraping complete. Found ${allJobs.length} jobs in November (or with 'Nov' in post date).`);
-    console.log(allJobs);
+    // console.log(allJobs);
+
+    // Output a readable table to the console and write an HTML report to disk
+    // console.table(allJobs);
+    const reportHtml = buildHtmlTable(allJobs);
+    const outputPath = `${process.cwd()}/jobs-report.html`;
+    fs.writeFileSync(outputPath, reportHtml, 'utf8');
+    console.log(`HTML report saved to ${outputPath}`);
 }
 
 scrapeSeek().catch(console.error);
