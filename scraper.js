@@ -71,6 +71,34 @@ function buildHtmlTable(jobs) {
 </html>`;
 }
 
+function formatTime(milliseconds) {
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    
+    if (hours > 0) {
+        return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${seconds % 60}s`;
+    } else {
+        return `${seconds}s`;
+    }
+}
+
+function matchesTitleKeywords(title) {
+    const keywords = [
+        'General Practitioner',
+        'Dentist',
+        'Podiatrist',
+        'Psychologist',
+        'Physiotherapist',
+        'Speech Pathologist',
+        'Occupational Therapist'
+    ];
+    const lowerTitle = title.toLowerCase();
+    return keywords.some(keyword => lowerTitle.includes(keyword.toLowerCase()));
+}
+
 function getActualDate(postDateText) {
     const today = new Date();
     let cleanedText = postDateText;
@@ -143,7 +171,7 @@ async function scrapeSeek() {
     let currentPage = 1;
     let hasNextPage = true;
 
-    while (hasNextPage && currentPage <= 15) { // Limiting to 5 pages for example
+    while (hasNextPage && currentPage <= 5) { // Limiting to 5 pages for example
         const url = `${TARGET_URL}&page=${currentPage}`;
         console.log(`Navigating to page ${currentPage}: ${url}`);
 
@@ -190,14 +218,17 @@ async function scrapeSeek() {
                     const TARGET_YEAR = new Date().getFullYear(); // Assuming you want Nov of the current year
 
                     if (postedMonth === TARGET_MONTH_INDEX && postedYear === TARGET_YEAR) {
-                        allJobs.push({
-                            title,
-                            company,
-                            location,
-                            posted_text: postDateText,
-                            actual_date: actualPostedDate.toDateString(), // Store the real date
-                            link
-                        });
+                        // Filter by job title keywords
+                        if (matchesTitleKeywords(title)) {
+                            allJobs.push({
+                                title,
+                                company,
+                                location,
+                                posted_text: postDateText,
+                                actual_date: actualPostedDate.toDateString(), // Store the real date
+                                link
+                            });
+                        }
                     }
                 }
 
@@ -253,4 +284,12 @@ async function scrapeSeek() {
     console.log(`HTML report saved to ${outputPath}`);
 }
 
-scrapeSeek().catch(console.error);
+(async () => {
+    const startTime = Date.now();
+    console.log('🔄 Starting scrape...');
+    
+    await scrapeSeek().catch(console.error);
+    
+    const elapsed = Date.now() - startTime;
+    console.log(`\n✨ Scraping took ${formatTime(elapsed)}`);
+})();
